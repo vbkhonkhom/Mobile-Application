@@ -1,0 +1,73 @@
+plugins {
+    id "com.android.application"
+    // START: FlutterFire Configuration
+    id "com.google.gms.google-services"
+    // END: FlutterFire Configuration
+    id "kotlin-android"
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+android {
+    namespace = "com.example.project"
+    compileSdk = 35
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+        coreLibraryDesugaringEnabled true
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_1_8
+    }
+
+    defaultConfig {
+        applicationId = "com.example.project"
+        minSdk = 23
+        targetSdk = 35
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+
+        // ✅ รองรับทั้ง 32/64 บิต
+        ndk {
+            abiFilters "armeabi-v7a", "arm64-v8a"
+        }
+    }
+
+    // ✅ บังคับให้ extract .so ออกมา (กันบางรุ่นโหลด lib ไม่ขึ้น)
+    // ใช้ DSL ใหม่ของ AGP; ถ้า build ไม่ได้ ให้ดูหมายเหตุด้านล่างเพื่อสลับเป็น packagingOptions
+    packaging {
+        jniLibs {
+            useLegacyPackaging true
+        }
+        // ถ้าเคย exclude resource จน asset หาย ค่อยเปิดบรรทัดด้านล่าง
+        // resources {
+        //     excludes += ["META-INF/*"]
+        // }
+    }
+
+    // ❌ ห้ามมีบล็อก splits-per-abi ถ้ามีให้ลบทิ้ง/คอมเมนต์ออกทั้งหมด
+    // splits { ... }  <-- เอาออก
+
+    buildTypes {
+        release {
+            // ให้รัน release ได้โดยยังใช้ debug keystore
+            signingConfig = signingConfigs.debug
+            // minifyEnabled false  // (ปกติ debug ไม่เปิด shrinker อยู่แล้ว)
+        }
+        debug {
+            // minifyEnabled false
+        }
+    }
+}
+
+flutter {
+    source = "../.."
+}
+
+// ✅ dependencies ต้องอยู่นอก android{}
+dependencies {
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.5"
+}
