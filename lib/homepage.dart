@@ -289,11 +289,6 @@ class _HomepageState extends State<Homepage> {
                                         child: Column(
                                           mainAxisAlignment: MainAxisAlignment.center,
                                           children: [
-                                            const Icon( // <-- ไอคอนออนไลน์เสมอ
-                                              Icons.videocam,
-                                              color: Colors.white,
-                                              size: 40,
-                                            ),
                                             const SizedBox(height: 8),
                                             Text(
                                               devices[i]['name'],
