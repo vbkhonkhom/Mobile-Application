@@ -6,6 +6,7 @@ import 'wrapper.dart';
 
 // Firebase / FCM
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // เพิ่ม import นี้
 import 'firebase_options.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -21,15 +22,48 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-/// ===== ใส่ docId ของ Raspberry_pi ที่ต้องการอัปเดต =====
-/// TODO: เปลี่ยนให้เป็น docId จริงที่แอปคุณใช้งานอยู่
-const String kRaspberryDocId = 'eXSfgAdWcMbqswVqJ7YF';
+// --- ลบ kRaspberryDocId ออก ---
+// const String kRaspberryDocId = 'eXSfgAdWcMbqswVqJ7YF';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // เปิด UI ก่อน (Firebase ไปทำใน RootGate)
   runApp(const MyApp());
 }
+
+/// ====== ฟังก์ชันกลางสำหรับอัปเดตสถานะอุปกรณ์ทั้งหมดของผู้ใช้ ======
+Future<void> _updateAllDeviceStatuses(bool online) async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return; // ถ้ายังไม่ล็อกอิน ก็ไม่ต้องทำอะไร
+
+  try {
+    // 1. ค้นหาอุปกรณ์ทั้งหมดที่ user คนนี้เป็นเจ้าของ
+    final querySnapshot = await FirebaseFirestore.instance
+        .collection('Raspberry_pi')
+        .where('ownerId', isEqualTo: user.uid)
+        .get();
+    
+    if (querySnapshot.docs.isEmpty) return; // ไม่มีอุปกรณ์ให้อัปเดต
+
+    // 2. ใช้ WriteBatch เพื่ออัปเดตทุกอุปกรณ์ในครั้งเดียว (มีประสิทธิภาพกว่า)
+    final batch = FirebaseFirestore.instance.batch();
+    
+    for (var doc in querySnapshot.docs) {
+      batch.update(doc.reference, {
+        'status': online ? 'online' : 'offline',
+        'lastSeen': FieldValue.serverTimestamp(),
+      });
+    }
+
+    // 3. ส่งคำสั่งอัปเดตทั้งหมด
+    await batch.commit();
+
+  } catch (e) {
+    // เงียบไว้ หรือจะ print error เพื่อ debug ก็ได้
+    // print("Error updating device statuses: $e");
+  }
+}
+
 
 /// ====== เช็คอินเทอร์เน็ต (HTTP 204 + TCP) ======
 Future<bool> hasRealInternet({Duration timeout = const Duration(seconds: 3)}) async {
@@ -178,23 +212,12 @@ class Heartbeat {
   }
 
   Future<void> _beat() async {
-    // คำนวณออนไลน์จริง ๆ แล้วอัปเดต lastSeen + status
     final online = await hasRealInternet();
     if (_lastOnline != online) {
       _lastOnline = online;
     }
-
-    try {
-      await FirebaseFirestore.instance
-          .collection('Raspberry_pi')
-          .doc(kRaspberryDocId)
-          .update({
-        'lastSeen': FieldValue.serverTimestamp(),
-        'status': online ? 'online' : 'offline',
-      });
-    } catch (_) {
-      // เงียบไว้
-    }
+    // --- เรียกใช้ฟังก์ชันกลาง ---
+    await _updateAllDeviceStatuses(online);
   }
 }
 
@@ -238,17 +261,8 @@ class NetworkWatcher {
 
   static Future<void> _writeStatus(bool online) async {
     if (Firebase.apps.isEmpty) return; // เผื่อถูกเรียกก่อน init
-    try {
-      await FirebaseFirestore.instance
-          .collection('Raspberry_pi')
-          .doc(kRaspberryDocId)
-          .update({
-        'status': online ? 'online' : 'offline',
-        'lastSeen': FieldValue.serverTimestamp(),
-      });
-    } catch (_) {
-      // เงียบไว้
-    }
+    // --- เรียกใช้ฟังก์ชันกลาง ---
+    await _updateAllDeviceStatuses(online);
   }
 
   static void stop() {
@@ -429,15 +443,7 @@ class _NoInternetPageState extends State<_NoInternetPage> {
 
     if (ok) {
       // อัปเดตสถานะด้วยว่าออนไลน์แล้ว + lastSeen
-      try {
-        await FirebaseFirestore.instance
-            .collection('Raspberry_pi')
-            .doc(kRaspberryDocId)
-            .update({
-          'status': 'online',
-          'lastSeen': FieldValue.serverTimestamp(),
-        });
-      } catch (_) {}
+      await _updateAllDeviceStatuses(true);
       // ปิดผ่านตัวกลาง → กัน pop ซ้อน
       await OfflineOverlay.close();
     }
