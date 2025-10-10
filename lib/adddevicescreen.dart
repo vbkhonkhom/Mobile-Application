@@ -27,7 +27,6 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
     final data = serialDoc.data()!;
     final currentStatus = data['status'];
     final currentOwnerId = data['ownerId'];
-    // ✅ เพิ่มการตรวจสอบว่า timestamp มีอยู่แล้วหรือไม่
     final hasTimestamp = data.containsKey('timestamp');
 
     if (currentStatus == 'To be Added') {
@@ -35,14 +34,14 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
       await serialRef.update({
         'status': 'online',
         'ownerId': user.uid,
-        // ✅ เพิ่ม timestamp เฉพาะเมื่อยังไม่มี timestamp
+        'lastSeen': FieldValue.serverTimestamp(), // <--- เพิ่มบรรทัดนี้
         if (!hasTimestamp) 'timestamp': FieldValue.serverTimestamp(),
       });
 
-      Navigator.pop(context, serial); // ✅ ส่ง serial กลับไปหน้า homepage
+      Navigator.pop(context, serial);
     } else if (currentStatus == 'online') {
       if (currentOwnerId == user.uid) {
-        Navigator.pop(context, serial); // ✅ เจ้าของเดิมเข้ามาซ้ำ ให้ผ่าน
+        Navigator.pop(context, serial);
       } else {
         _showMessage("อุปกรณ์นี้ถูกใช้งานโดยบัญชีอื่นแล้ว");
       }

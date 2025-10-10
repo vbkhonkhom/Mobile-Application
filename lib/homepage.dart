@@ -13,8 +13,8 @@ class Homepage extends StatefulWidget {
 }
 
 class _HomepageState extends State<Homepage> {
-  // --- แก้ไขกลับเป็น List<String> ---
-  List<String> devices = [];
+  // --- เปลี่ยนเป็น List<Map<String, dynamic>> ---
+  List<Map<String, dynamic>> devices = [];
   List<String> serials = [];
   Set<int> selectedIndexes = {};
   bool isEditMode = false;
@@ -121,7 +121,8 @@ class _HomepageState extends State<Homepage> {
     }
   }
 
-  // --- แก้ไขฟังก์ชันนี้ โดยเอา logic การเช็ค offline ออก ---
+  // --- แก้ไขฟังก์ชันนี้ ---
+  // ในคลาส _HomepageState, ฟังก์ชัน _loadDevicesFromRaspberryPi()
   Future<void> _loadDevicesFromRaspberryPi(String ownerId) async {
     final snapshot = await FirebaseFirestore.instance
         .collection('Raspberry_pi')
@@ -132,11 +133,24 @@ class _HomepageState extends State<Homepage> {
       setState(() {
         serials = snapshot.docs.map((doc) => doc.id).toList();
         devices = List.generate(snapshot.docs.length, (index) {
-          final data = snapshot.docs[index].data();
+          final doc = snapshot.docs[index];
+          final data = doc.data();
           final name = data['name']?.toString().trim();
-          return (name != null && name.isNotEmpty)
-              ? name
-              : 'อุปกรณ์ที่ ${index + 1}';
+          
+          // ตรรกะเช็คสถานะจาก lastSeen
+          bool isOnline = false;
+          if (data['status'] == 'online' && data['lastSeen'] != null) { // <--- อ่านจาก lastSeen
+            final lastSeen = (data['lastSeen'] as Timestamp).toDate(); // <--- อ่านจาก lastSeen
+            if (DateTime.now().difference(lastSeen).inMinutes < 2) {
+              isOnline = true;
+            }
+          }
+
+          return {
+            'name': (name != null && name.isNotEmpty) ? name : 'อุปกรณ์ที่ ${index + 1}',
+            'isOnline': isOnline,
+            'serial': doc.id,
+          };
         });
         currentSerial = serials.isNotEmpty ? serials.first : '';
         isEditMode = false;
@@ -183,9 +197,8 @@ class _HomepageState extends State<Homepage> {
     }
   }
 
-  // --- แก้ไขฟังก์ชันนี้ให้รับค่า String เหมือนเดิม ---
   Future<void> _renameDevice(int index) async {
-    final currentName = devices[index];
+    final currentName = devices[index]['name'];
     final nameController = TextEditingController(text: currentName);
     final newName = await showDialog<String>(
       context: context,
@@ -260,24 +273,34 @@ class _HomepageState extends State<Homepage> {
                                     onTap: () {
                                       if (isEditMode && role == 'owner') {
                                         _renameDevice(i);
-                                      } else {
+                                      } else { // <-- เอาเงื่อนไข isOnline ออก
                                         setState(() {
-                                          currentSerial = serials[i];
+                                          currentSerial = devices[i]['serial'];
                                           _selectedIndex = 1;
                                         });
                                       }
                                     },
                                     child: Container(
                                       decoration: BoxDecoration(
-                                        // --- แก้ไขสีกลับเป็นแบบเดิม ---
-                                        color: const Color(0xFF263F6B),
+                                        color: const Color(0xFF263F6B), // <-- สีฟ้าเสมอ
                                         borderRadius: BorderRadius.circular(16),
                                       ),
                                       child: Center(
-                                        child: Text(
-                                          devices[i],
-                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                          textAlign: TextAlign.center,
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            const Icon( // <-- ไอคอนออนไลน์เสมอ
+                                              Icons.videocam,
+                                              color: Colors.white,
+                                              size: 40,
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              devices[i]['name'],
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ),
