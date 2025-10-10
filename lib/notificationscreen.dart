@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // เพิ่ม import
 import 'package:flutter/material.dart';
 
 class NotificationScreen extends StatefulWidget {
@@ -13,18 +14,43 @@ class NotificationScreen extends StatefulWidget {
 class _NotificationScreenState extends State<NotificationScreen> {
   List<Map<String, String>> devices = []; // ⬅ ใช้ Map เพื่อเก็บ serial + name
   String? selectedSerial;
+  bool _isLoading = true; // เพิ่ม state สำหรับ loading
 
   @override
   void initState() {
     super.initState();
-    _loadDeviceSerials();
+    _loadDeviceSerialsForCurrentUser(); // เปลี่ยนชื่อฟังก์ชัน
   }
 
-  Future<void> _loadDeviceSerials() async {
-    final snap = await FirebaseFirestore.instance.collection('Raspberry_pi').get();
+  // --- แก้ไขฟังก์ชันนี้ทั้งหมด ---
+  Future<void> _loadDeviceSerialsForCurrentUser() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    // 1. หา ownerId ที่ถูกต้อง (เหมือนใน homepage.dart)
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final userData = userDoc.data();
+    String ownerId;
+
+    if (userData != null && userData.containsKey('owner')) {
+      // กรณีเป็นลูกบ้าน
+      ownerId = userData['owner'];
+    } else {
+      // กรณีเป็นเจ้าบ้าน
+      ownerId = user.uid;
+    }
+
+    // 2. ดึงข้อมูลเฉพาะอุปกรณ์ที่ผู้ใช้มีสิทธิ์
+    final snap = await FirebaseFirestore.instance
+        .collection('Raspberry_pi')
+        .where('ownerId', isEqualTo: ownerId)
+        .get();
+
     final all = snap.docs;
 
-    // สร้างรายการชื่อ + serial
     final loaded = all.asMap().entries.map((entry) {
       final index = entry.key;
       final doc = entry.value;
@@ -41,10 +67,21 @@ class _NotificationScreenState extends State<NotificationScreen> {
     if (mounted) {
       setState(() {
         devices = loaded;
-        selectedSerial = widget.serialNumber;
+        // ตรวจสอบว่า serialNumber ที่รับมา ยังมีสิทธิ์เข้าถึงหรือไม่
+        if (devices.any((d) => d['serial'] == widget.serialNumber)) {
+          selectedSerial = widget.serialNumber;
+        } else if (devices.isNotEmpty) {
+          // ถ้าไม่มีสิทธิ์แล้ว ให้เลือกอุปกรณ์ตัวแรกแทน
+          selectedSerial = devices.first['serial'];
+        } else {
+          // ไม่มีอุปกรณ์ให้เลือกเลย
+          selectedSerial = null;
+        }
+        _isLoading = false;
       });
     }
   }
+  // --- จบส่วนที่แก้ไข ---
 
   String translateType(dynamic type) {
     final t = (type ?? '').toString().toLowerCase();
@@ -64,9 +101,26 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (selectedSerial == null) {
+    // --- แก้ไขส่วน Build ---
+    if (_isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+
+    // กรณีไม่มีอุปกรณ์เลย
+    if (selectedSerial == null || devices.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(
+          backgroundColor: const Color(0xFFd4e8ff),
+          foregroundColor: Colors.black,
+          title: const Text("การแจ้งเตือน"),
+          centerTitle: true,
+        ),
+        body: const Center(
+          child: Text('คุณไม่มีอุปกรณ์ที่สามารถดูการแจ้งเตือนได้'),
+        ),
+      );
+    }
+    // --- จบส่วนที่แก้ไข ---
 
     return Scaffold(
       backgroundColor: const Color(0xFFEAF4FF),
@@ -118,9 +172,21 @@ class _NotificationScreenState extends State<NotificationScreen> {
                   itemBuilder: (_, i) {
                     final data = docs[i].data() as Map<String, dynamic>;
                     final ts = (data['timestamp'] as Timestamp).toDate();
+                    final imageUrl = data['image_url'] as String?; // ป้องกัน error ถ้าไม่มี image_url
+
+                    // ถ้าไม่มี imageUrl ให้แสดงเป็น Card เปล่าๆ หรือข้อความแทน
+                    if (imageUrl == null) {
+                      return Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text('ไม่มีรูปภาพสำหรับการแจ้งเตือนนี้'),
+                        ),
+                      );
+                    }
 
                     return _NotificationCard(
-                      imageUrl: data['image_url'],
+                      imageUrl: imageUrl,
                       dateTime: ts,
                       typeTh: translateType(data['type']),
                     );
@@ -161,6 +227,35 @@ class _NotificationCard extends StatelessWidget {
               height: 200,
               width: double.infinity,
               fit: BoxFit.cover,
+              // เพิ่ม errorBuilder และ loadingBuilder เพื่อประสบการณ์ใช้งานที่ดีขึ้น
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  height: 200,
+                  alignment: Alignment.center,
+                  child: CircularProgressIndicator(
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded /
+                            loadingProgress.expectedTotalBytes!
+                        : null,
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  height: 200,
+                  color: Colors.grey[300],
+                  alignment: Alignment.center,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.broken_image, color: Colors.grey[600], size: 40),
+                      SizedBox(height: 8),
+                      Text('ไม่สามารถโหลดรูปภาพได้', style: TextStyle(color: Colors.grey[600])),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
           Padding(

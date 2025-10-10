@@ -23,7 +23,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 /// ===== ใส่ docId ของ Raspberry_pi ที่ต้องการอัปเดต =====
 /// TODO: เปลี่ยนให้เป็น docId จริงที่แอปคุณใช้งานอยู่
-const String kRaspberryDocId = 'qcoSjhZXfYNkCUMxKfOn';
+const String kRaspberryDocId = 'eXSfgAdWcMbqswVqJ7YF';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

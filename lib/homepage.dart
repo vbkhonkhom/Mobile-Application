@@ -13,6 +13,7 @@ class Homepage extends StatefulWidget {
 }
 
 class _HomepageState extends State<Homepage> {
+  // --- แก้ไขกลับเป็น List<String> ---
   List<String> devices = [];
   List<String> serials = [];
   Set<int> selectedIndexes = {};
@@ -24,7 +25,7 @@ class _HomepageState extends State<Homepage> {
   bool _isFirstTime = true;
 
   bool hasNotification = false;
-  bool hasInvite = false; // ✅ จุดแดงคำเชิญ
+  bool hasInvite = false;
 
   @override
   void initState() {
@@ -36,34 +37,31 @@ class _HomepageState extends State<Homepage> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final userDoc =
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
     final userData = userDoc.data();
 
     bool hasDevices = false;
 
     if (userData != null && userData.containsKey('owner')) {
-      // ลูกบ้าน
       final ownerId = userData['owner'];
       role = 'member';
       currentOwnerId = ownerId;
       hasDevices = true;
     } else {
-      // เจ้าบ้าน
       role = 'owner';
       currentOwnerId = user.uid;
-
       final deviceSnap = await FirebaseFirestore.instance
           .collection('Raspberry_pi')
           .where('ownerId', isEqualTo: user.uid)
           .limit(1)
           .get();
-
       hasDevices = deviceSnap.docs.isNotEmpty;
     }
 
     await _loadDevicesFromRaspberryPi(currentOwnerId);
     await _checkNotifications();
-    await _checkInvites(); // ✅ ตรวจสอบคำเชิญ
+    await _checkInvites();
 
     if (_isFirstTime && mounted) {
       _isFirstTime = false;
@@ -77,7 +75,8 @@ class _HomepageState extends State<Homepage> {
           message = 'ล็อกอินสำเร็จ';
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
       });
     }
   }
@@ -95,7 +94,6 @@ class _HomepageState extends State<Homepage> {
           .collection('detections')
           .limit(1)
           .get();
-
       if (detectionSnap.docs.isNotEmpty) {
         if (mounted) setState(() => hasNotification = true);
         return;
@@ -123,6 +121,7 @@ class _HomepageState extends State<Homepage> {
     }
   }
 
+  // --- แก้ไขฟังก์ชันนี้ โดยเอา logic การเช็ค offline ออก ---
   Future<void> _loadDevicesFromRaspberryPi(String ownerId) async {
     final snapshot = await FirebaseFirestore.instance
         .collection('Raspberry_pi')
@@ -135,7 +134,9 @@ class _HomepageState extends State<Homepage> {
         devices = List.generate(snapshot.docs.length, (index) {
           final data = snapshot.docs[index].data();
           final name = data['name']?.toString().trim();
-          return (name != null && name.isNotEmpty) ? name : 'อุปกรณ์ที่ ${index + 1}';
+          return (name != null && name.isNotEmpty)
+              ? name
+              : 'อุปกรณ์ที่ ${index + 1}';
         });
         currentSerial = serials.isNotEmpty ? serials.first : '';
         isEditMode = false;
@@ -148,7 +149,6 @@ class _HomepageState extends State<Homepage> {
       context,
       MaterialPageRoute(builder: (_) => const AddDeviceScreen()),
     );
-
     if (result != null && result is String) {
       await _loadDevicesFromRaspberryPi(currentOwnerId);
       await _checkNotifications();
@@ -163,21 +163,18 @@ class _HomepageState extends State<Homepage> {
   }
 
   Future<void> _deleteSelected() async {
-    for (int i = 0; i < serials.length; i++) {
-      if (selectedIndexes.contains(i)) {
-        await FirebaseFirestore.instance
-            .collection('Raspberry_pi')
-            .doc(serials[i])
-            .update({
-              'status': 'To be Added',
-              'ownerId': FieldValue.delete(),
-            });
-      }
+    // ใช้ `toList` เพื่อสร้างสำเนาของ `selectedIndexes` ก่อนวนลูป
+    for (int i in selectedIndexes.toList()) {
+      await FirebaseFirestore.instance
+          .collection('Raspberry_pi')
+          .doc(serials[i])
+          .update({
+        'status': 'To be Added',
+        'ownerId': FieldValue.delete(),
+      });
     }
-
     await _loadDevicesFromRaspberryPi(currentOwnerId);
     await _checkNotifications();
-
     if (mounted) {
       setState(() {
         selectedIndexes.clear();
@@ -186,10 +183,10 @@ class _HomepageState extends State<Homepage> {
     }
   }
 
+  // --- แก้ไขฟังก์ชันนี้ให้รับค่า String เหมือนเดิม ---
   Future<void> _renameDevice(int index) async {
     final currentName = devices[index];
     final nameController = TextEditingController(text: currentName);
-
     final newName = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -204,23 +201,19 @@ class _HomepageState extends State<Homepage> {
         ],
       ),
     );
-
     if (newName != null && newName.trim().isNotEmpty) {
       await FirebaseFirestore.instance
           .collection('Raspberry_pi')
           .doc(serials[index])
           .update({'name': newName.trim()});
-
       await _loadDevicesFromRaspberryPi(currentOwnerId);
     }
   }
 
   void _onItemTapped(int index) {
     if (index == 1 && devices.isEmpty) return;
-
     setState(() {
       _selectedIndex = index;
-
       if (index == 1) hasNotification = false;
       if (index == 2) hasInvite = false;
     });
@@ -229,10 +222,9 @@ class _HomepageState extends State<Homepage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      //backgroundColor: const Color(0xFFF8F8F8),
       body: SafeArea(
         child: _selectedIndex == 0
-            ? role == 'loading'
+            ? (role == 'loading'
                 ? const Center(child: CircularProgressIndicator())
                 : Column(
                     children: [
@@ -243,10 +235,7 @@ class _HomepageState extends State<Homepage> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'อุปกรณ์ทั้งหมด',
-                              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                            ),
+                            const Text('อุปกรณ์ทั้งหมด', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                             if (devices.isNotEmpty && role == 'owner')
                               IconButton(
                                 icon: Icon(isEditMode ? Icons.check : Icons.edit, color: Colors.black),
@@ -280,16 +269,14 @@ class _HomepageState extends State<Homepage> {
                                     },
                                     child: Container(
                                       decoration: BoxDecoration(
+                                        // --- แก้ไขสีกลับเป็นแบบเดิม ---
                                         color: const Color(0xFF263F6B),
                                         borderRadius: BorderRadius.circular(16),
                                       ),
                                       child: Center(
                                         child: Text(
                                           devices[i],
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                                           textAlign: TextAlign.center,
                                         ),
                                       ),
@@ -341,10 +328,10 @@ class _HomepageState extends State<Homepage> {
                           ),
                         ),
                     ],
-                  )
-          : _selectedIndex == 1
-            ? NotificationScreen(serialNumber: currentSerial)
-            : const OtherScreen(),
+                  ))
+            : (_selectedIndex == 1
+                ? NotificationScreen(serialNumber: currentSerial)
+                : const OtherScreen()),
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
@@ -352,45 +339,35 @@ class _HomepageState extends State<Homepage> {
         items: [
           const BottomNavigationBarItem(icon: Icon(Icons.devices), label: 'อุปกรณ์'),
           BottomNavigationBarItem(
-            icon: Stack(
-              children: [
-                const Icon(Icons.notifications),
-                if (hasNotification)
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
+            icon: Stack(children: [
+              const Icon(Icons.notifications),
+              if (hasNotification)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                   ),
-              ],
-            ),
+                ),
+            ]),
             label: 'การแจ้งเตือน',
           ),
           BottomNavigationBarItem(
-            icon: Stack(
-              children: [
-                const Icon(Icons.person),
-                if (hasInvite)
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
+            icon: Stack(children: [
+              const Icon(Icons.person),
+              if (hasInvite)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                   ),
-              ],
-            ),
+                ),
+            ]),
             label: 'อื่น ๆ',
           ),
         ],
