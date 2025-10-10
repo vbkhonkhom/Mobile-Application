@@ -336,8 +336,10 @@ class _AccountScreenState extends State<AccountScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         centerTitle: true,
+        // โค้ดที่แก้ไขในส่วน actions ของ AppBar
         actions: [
-          if (accountList.isNotEmpty && !isMember)
+          // ปุ่มจะแสดงก็ต่อเมื่อ (ไม่ใช่ลูกบ้าน AND ไม่ใช่หน้าจอว่างเปล่าที่ไม่มีอุปกรณ์)
+          if (!isMember && !isDeviceEmpty)
             TextButton(
               onPressed: () => setState(() {
                 isEditMode = !isEditMode;
