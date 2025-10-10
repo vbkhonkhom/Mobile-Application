@@ -310,12 +310,12 @@ class _RootGateState extends State<RootGate> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  /// lifecycle: เวลาสลับโฟกัส ยิง heartbeat ทันที
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed ||
-        state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.paused) {
+    if (_firebaseReady && // <--- เพิ่มเงื่อนไขนี้
+        (state == AppLifecycleState.resumed ||
+            state == AppLifecycleState.inactive ||
+            state == AppLifecycleState.paused)) {
       Heartbeat.I.start();
     }
   }

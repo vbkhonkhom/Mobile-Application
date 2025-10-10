@@ -185,6 +185,7 @@ class _HomepageState extends State<Homepage> {
           .update({
         'status': 'To be Added',
         'ownerId': FieldValue.delete(),
+        'lastSeen': FieldValue.delete(), // <-- เพิ่มบรรทัดนี้เพื่อลบฟิลด์ lastSeen
       });
     }
     await _loadDevicesFromRaspberryPi(currentOwnerId);
