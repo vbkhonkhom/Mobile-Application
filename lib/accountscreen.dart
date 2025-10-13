@@ -273,7 +273,16 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Future<void> _deleteSelectedAccount() async {
+    if (selectedIndex == null) return;
+    
     final selected = accountList[selectedIndex!];
+
+    if (selected['isOwner'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("ไม่สามารถลบบัญชีของตัวเองได้")),
+      );
+      return;
+    }
 
     final result = await FirebaseFirestore.instance
         .collection('users')
@@ -390,13 +399,15 @@ class _AccountScreenState extends State<AccountScreen> {
                   decoration: BoxDecoration(color: const Color(0xFFE8F3FF), borderRadius: BorderRadius.circular(8)),
                   child: ListTile(
                     title: Text(isOwner ? '$email (เจ้าบ้าน)' : email),
-                    trailing: isEditMode
+                    // --- START: โค้ดที่แก้ไข ---
+                    trailing: isEditMode && !isOwner
                         ? Radio<int>(
                             value: index,
                             groupValue: selectedIndex,
                             onChanged: (val) => setState(() => selectedIndex = val),
                           )
                         : null,
+                    // --- END: โค้ดที่แก้ไข ---
                   ),
                 );
               },
@@ -407,7 +418,9 @@ class _AccountScreenState extends State<AccountScreen> {
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: ElevatedButton(
-              onPressed: selectedIndex != null ? _deleteSelectedAccount : null,
+              onPressed: selectedIndex != null && !accountList[selectedIndex!]['isOwner']
+                  ? _deleteSelectedAccount
+                  : null,
               style: ElevatedButton.styleFrom(backgroundColor: const Color.fromRGBO(211, 47, 47, 1)),
               child: const Text("ลบบัญชี", style: TextStyle(color: Colors.white)),
             ),
