@@ -22,14 +22,47 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-// --- ลบ kRaspberryDocId ออก ---
-// const String kRaspberryDocId = 'eXSfgAdWcMbqswVqJ7YF';
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // เปิด UI ก่อน (Firebase ไปทำใน RootGate)
   runApp(const MyApp());
 }
+
+// --- 🎯 START: โค้ดที่เพิ่มเข้ามา ---
+/// ====== ฟังก์ชันสำหรับอัปเดต Topic Subscription ของผู้ใช้ ======
+Future<void> updateUserTopicSubscription() async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+
+  final messaging = FirebaseMessaging.instance;
+  
+  // ยกเลิกการสมัคร topic เก่าก่อนเสมอ (เผื่อมีการเปลี่ยนแปลง)
+  // หมายเหตุ: หากคุณมี topic อื่นๆ ที่ต้องการให้ user subscribe ค้างไว้ อาจจะต้องจัดการส่วนนี้เพิ่มเติม
+  await messaging.unsubscribeFromTopic('animal_alerts');
+
+  // 1. หา userId ที่แท้จริง
+  final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+  final userData = userDoc.data();
+  String? userId; // <-- เปลี่ยนเป็น nullable
+
+  if (userData != null && userData.containsKey('user')) {
+    // กรณีเป็นลูกบ้าน
+    userId = userData['user'];
+  } else {
+    // กรณีเป็นเจ้าบ้าน (ใช้ uid ของตัวเองเป็น topic)
+    userId = user.uid;
+  }
+
+  // 2. สมัครรับ topic ใหม่ที่เป็น userId
+  if (userId != null && userId.isNotEmpty) {
+    print("✅ Subscribing to topic: $userId");
+    await messaging.subscribeToTopic(userId);
+  } else {
+    print("⚠️ No userId found, cannot subscribe to a topic.");
+  }
+}
+// --- END: โค้ดที่เพิ่มเข้ามา ---
+
 
 /// ====== ฟังก์ชันกลางสำหรับอัปเดตสถานะอุปกรณ์ทั้งหมดของผู้ใช้ ======
 Future<void> _updateAllDeviceStatuses(bool online) async {
@@ -40,7 +73,7 @@ Future<void> _updateAllDeviceStatuses(bool online) async {
     // 1. ค้นหาอุปกรณ์ทั้งหมดที่ user คนนี้เป็นเจ้าของ
     final querySnapshot = await FirebaseFirestore.instance
         .collection('Raspberry_pi')
-        .where('ownerId', isEqualTo: user.uid)
+        .where('userId', isEqualTo: user.uid)
         .get();
     
     if (querySnapshot.docs.isEmpty) return; // ไม่มีอุปกรณ์ให้อัปเดต
@@ -253,7 +286,7 @@ class NetworkWatcher {
 
   static Future<void> _primeOnce() async {
     final r = await Connectivity().checkConnectivity();
-    final online = (r != ConnectivityResult.none) ? await hasRealInternet() : false;
+    final online = (r.any((res) => res != ConnectivityResult.none)) ? await hasRealInternet() : false;
     _lastOnline = online;
     if (!online) await OfflineOverlay.open();
     await _writeStatus(online);
@@ -352,7 +385,11 @@ class _RootGateState extends State<RootGate> with WidgetsBindingObserver {
 
           // FCM
           await FirebaseMessaging.instance.requestPermission();
-          await FirebaseMessaging.instance.subscribeToTopic('animal_alerts');
+          
+          // --- 🎯 START: โค้ดที่แก้ไข ---
+          // ลบบรรทัด subscribe เดิมทิ้ง
+          // await FirebaseMessaging.instance.subscribeToTopic('animal_alerts');
+          // --- END: โค้ดที่แก้ไข ---
 
           FirebaseMessaging.onMessage.listen((RemoteMessage message) {
             final n = message.notification;
@@ -390,6 +427,11 @@ class _RootGateState extends State<RootGate> with WidgetsBindingObserver {
 
       if (!mounted) return;
       _firebaseReady = true;
+
+      // --- 🎯 START: โค้ดที่แก้ไข ---
+      // เรียกใช้ฟังก์ชันอัปเดต Topic หลังจาก Firebase พร้อม
+      await updateUserTopicSubscription();
+      // --- END: โค้ดที่แก้ไข ---
 
       // เริ่มเฝ้าเน็ต + heartbeat เมื่อระบบพร้อม
       NetworkWatcher.start();

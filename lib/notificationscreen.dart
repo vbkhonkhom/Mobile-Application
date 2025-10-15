@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // เพิ่ม import
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class NotificationScreen extends StatefulWidget {
@@ -12,17 +12,16 @@ class NotificationScreen extends StatefulWidget {
 }
 
 class _NotificationScreenState extends State<NotificationScreen> {
-  List<Map<String, String>> devices = []; // ⬅ ใช้ Map เพื่อเก็บ serial + name
+  List<Map<String, String>> devices = [];
   String? selectedSerial;
-  bool _isLoading = true; // เพิ่ม state สำหรับ loading
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadDeviceSerialsForCurrentUser(); // เปลี่ยนชื่อฟังก์ชัน
+    _loadDeviceSerialsForCurrentUser();
   }
 
-  // --- แก้ไขฟังก์ชันนี้ทั้งหมด ---
   Future<void> _loadDeviceSerialsForCurrentUser() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -30,20 +29,16 @@ class _NotificationScreenState extends State<NotificationScreen> {
       return;
     }
 
-    // 1. หา ownerId ที่ถูกต้อง (เหมือนใน homepage.dart)
     final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
     final userData = userDoc.data();
     String ownerId;
 
     if (userData != null && userData.containsKey('owner')) {
-      // กรณีเป็นลูกบ้าน
       ownerId = userData['owner'];
     } else {
-      // กรณีเป็นเจ้าบ้าน
       ownerId = user.uid;
     }
 
-    // 2. ดึงข้อมูลเฉพาะอุปกรณ์ที่ผู้ใช้มีสิทธิ์
     final snap = await FirebaseFirestore.instance
         .collection('Raspberry_pi')
         .where('ownerId', isEqualTo: ownerId)
@@ -67,25 +62,20 @@ class _NotificationScreenState extends State<NotificationScreen> {
     if (mounted) {
       setState(() {
         devices = loaded;
-        // ตรวจสอบว่า serialNumber ที่รับมา ยังมีสิทธิ์เข้าถึงหรือไม่
         if (devices.any((d) => d['serial'] == widget.serialNumber)) {
           selectedSerial = widget.serialNumber;
         } else if (devices.isNotEmpty) {
-          // ถ้าไม่มีสิทธิ์แล้ว ให้เลือกอุปกรณ์ตัวแรกแทน
           selectedSerial = devices.first['serial'];
         } else {
-          // ไม่มีอุปกรณ์ให้เลือกเลย
           selectedSerial = null;
         }
         _isLoading = false;
       });
     }
   }
-  // --- จบส่วนที่แก้ไข ---
 
-  String translateType(dynamic type) {
-    final t = (type ?? '').toString().toLowerCase();
-    switch (t) {
+  String _translateType(String type) {
+    switch (type.toLowerCase()) {
       case 'mouse':
         return 'หนู';
       case 'snake':
@@ -95,18 +85,40 @@ class _NotificationScreenState extends State<NotificationScreen> {
       case 'lizard':
         return 'ตัวเงินตัวทอง';
       default:
-        return t;
+        return type;
     }
   }
 
+  String formatDetectedTypes(dynamic detectedObjects) {
+    if (detectedObjects is! List || detectedObjects.isEmpty) {
+      return 'ไม่ระบุชนิด';
+    }
+
+    final counts = <String, int>{};
+    for (var item in detectedObjects) {
+      if (item is Map && item.containsKey('type')) {
+        final type = item['type'].toString().toLowerCase();
+        counts[type] = (counts[type] ?? 0) + 1;
+      }
+    }
+
+    if (counts.isEmpty) {
+      return 'ไม่ระบุชนิด';
+    }
+
+    return counts.entries.map((entry) {
+      final thaiType = _translateType(entry.key);
+      return '${thaiType} ${entry.value} ตัว';
+    }).join(', ');
+  }
+
+
   @override
   Widget build(BuildContext context) {
-    // --- แก้ไขส่วน Build ---
     if (_isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // กรณีไม่มีอุปกรณ์เลย
     if (selectedSerial == null || devices.isEmpty) {
       return Scaffold(
         appBar: AppBar(
@@ -120,7 +132,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
         ),
       );
     }
-    // --- จบส่วนที่แก้ไข ---
 
     return Scaffold(
       backgroundColor: const Color(0xFFEAF4FF),
@@ -167,14 +178,53 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 final docs = snap.data!.docs;
                 if (docs.isEmpty) return const Center(child: Text('ยังไม่มีการแจ้งเตือน'));
 
+                docs.sort((a, b) {
+                  final dataA = a.data() as Map<String, dynamic>;
+                  final dataB = b.data() as Map<String, dynamic>;
+
+                  final tsValueA = dataA['timestamp'];
+                  final tsValueB = dataB['timestamp'];
+
+                  DateTime dtA;
+                  DateTime dtB;
+
+                  if (tsValueA is Timestamp) {
+                    dtA = tsValueA.toDate();
+                  } else if (tsValueA is String) {
+                    dtA = DateTime.tryParse(tsValueA) ?? DateTime(1970);
+                  } else {
+                    dtA = DateTime(1970);
+                  }
+
+                  if (tsValueB is Timestamp) {
+                    dtB = tsValueB.toDate();
+                  } else if (tsValueB is String) {
+                    dtB = DateTime.tryParse(tsValueB) ?? DateTime(1970);
+                  } else {
+                    dtB = DateTime(1970);
+                  }
+
+                  return dtB.compareTo(dtA);
+                });
+
                 return ListView.builder(
                   itemCount: docs.length,
                   itemBuilder: (_, i) {
                     final data = docs[i].data() as Map<String, dynamic>;
-                    final ts = (data['timestamp'] as Timestamp).toDate();
-                    final imageUrl = data['image_url'] as String?; // ป้องกัน error ถ้าไม่มี image_url
 
-                    // ถ้าไม่มี imageUrl ให้แสดงเป็น Card เปล่าๆ หรือข้อความแทน
+                    final dynamic tsValue = data['timestamp'];
+                    DateTime ts;
+                    if (tsValue is Timestamp) {
+                      ts = tsValue.toDate();
+                    } else if (tsValue is String) {
+                      ts = DateTime.tryParse(tsValue) ?? DateTime.now();
+                    } else {
+                      ts = DateTime.now();
+                    }
+
+                    final imageUrl = data['image_url'] as String?;
+                    final detectedObjects = data['detected_objects'];
+
                     if (imageUrl == null) {
                       return Card(
                         margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -188,7 +238,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                     return _NotificationCard(
                       imageUrl: imageUrl,
                       dateTime: ts,
-                      typeTh: translateType(data['type']),
+                      detectedSummary: formatDetectedTypes(detectedObjects),
                     );
                   },
                 );
@@ -205,12 +255,12 @@ class _NotificationCard extends StatelessWidget {
   const _NotificationCard({
     required this.imageUrl,
     required this.dateTime,
-    required this.typeTh,
+    required this.detectedSummary,
   });
 
   final String imageUrl;
   final DateTime dateTime;
-  final String typeTh;
+  final String detectedSummary;
 
   @override
   Widget build(BuildContext context) {
@@ -220,44 +270,52 @@ class _NotificationCard extends StatelessWidget {
       elevation: 2,
       child: Column(
         children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            child: Image.network(
-              imageUrl,
-              height: 200,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              // เพิ่ม errorBuilder และ loadingBuilder เพื่อประสบการณ์ใช้งานที่ดีขึ้น
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Container(
-                  height: 200,
-                  alignment: Alignment.center,
-                  child: CircularProgressIndicator(
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded /
-                            loadingProgress.expectedTotalBytes!
-                        : null,
-                  ),
-                );
-              },
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  height: 200,
-                  color: Colors.grey[300],
-                  alignment: Alignment.center,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.broken_image, color: Colors.grey[600], size: 40),
-                      SizedBox(height: 8),
-                      Text('ไม่สามารถโหลดรูปภาพได้', style: TextStyle(color: Colors.grey[600])),
-                    ],
-                  ),
-                );
-              },
+          // --- 🎯 START: เพิ่ม GestureDetector ครอบรูปภาพ ---
+          GestureDetector(
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) {
+                return _FullScreenImageViewer(imageUrl: imageUrl);
+              }));
+            },
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              child: Image.network(
+                imageUrl,
+                height: 200,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    height: 200,
+                    alignment: Alignment.center,
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                          : null,
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    height: 200,
+                    color: Colors.grey[300],
+                    alignment: Alignment.center,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.broken_image, color: Colors.grey[600], size: 40),
+                        const SizedBox(height: 8),
+                        Text('ไม่สามารถโหลดรูปภาพได้', style: TextStyle(color: Colors.grey[600])),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
           ),
+          // --- 🎯 END: เพิ่ม GestureDetector ---
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12).copyWith(top: 6, bottom: 10),
             child: Row(
@@ -281,7 +339,7 @@ class _NotificationCard extends StatelessWidget {
                 Expanded(
                   flex: 3,
                   child: Text(
-                    typeTh,
+                    detectedSummary,
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
@@ -294,3 +352,31 @@ class _NotificationCard extends StatelessWidget {
     );
   }
 }
+
+// --- 🎯 START: เพิ่ม Widget ใหม่สำหรับแสดงภาพเต็มจอ ---
+class _FullScreenImageViewer extends StatelessWidget {
+  final String imageUrl;
+
+  const _FullScreenImageViewer({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: GestureDetector(
+        onTap: () {
+          Navigator.pop(context); // กดเพื่อกลับ
+        },
+        child: Center(
+          child: InteractiveViewer( // Widget ที่ช่วยให้ซูมและเลื่อนได้
+            panEnabled: true,
+            minScale: 0.5,
+            maxScale: 4,
+            child: Image.network(imageUrl),
+          ),
+        ),
+      ),
+    );
+  }
+}
+// --- 🎯 END: เพิ่ม Widget ใหม่ ---

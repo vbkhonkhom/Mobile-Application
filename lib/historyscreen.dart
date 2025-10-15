@@ -43,14 +43,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     String ownerId = uid;
 
-    // ตรวจสอบว่า user นี้เป็นลูกบ้านหรือเจ้าบ้าน
     final userDoc = await firestore.collection('users').doc(uid).get();
     final userData = userDoc.data();
     if (userData != null && userData['owner'] != null) {
       ownerId = userData['owner'];
     }
 
-    // หาอุปกรณ์ทั้งหมดที่ ownerId นี้เป็นเจ้าของ
     final snapshot = await firestore
         .collection('Raspberry_pi')
         .where('ownerId', isEqualTo: ownerId)
@@ -68,11 +66,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
       });
     }
 
-    setState(() {
-      serials = allDevices;
-      selectedSerial = allDevices.isNotEmpty ? allDevices.first['serial'] : null;
-      isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        serials = allDevices;
+        selectedSerial = allDevices.isNotEmpty ? allDevices.first['serial'] : null;
+        isLoading = false;
+      });
+    }
   }
 
   Stream<QuerySnapshot> _monthStream() {
@@ -87,16 +87,45 @@ class _HistoryScreenState extends State<HistoryScreen> {
         .collection('detections')
         .where('timestamp', isGreaterThanOrEqualTo: first)
         .where('timestamp', isLessThan: next)
-        .orderBy('timestamp', descending: !showStatistic)
+        .orderBy('timestamp', descending: true) // เรียงจากใหม่ไปเก่าเสมอ
         .snapshots();
   }
 
+  // --- 🎯 START: โค้ดที่แก้ไข ---
+  // สร้างฟังก์ชัน helper สำหรับแปลง detected_objects เป็นข้อความสรุป
+  String _formatDetectedTypes(dynamic detectedObjects) {
+    if (detectedObjects is! List || detectedObjects.isEmpty) {
+      // ลองหาจาก type เก่า (ถ้ามี)
+      return 'ไม่ระบุชนิด';
+    }
+    final counts = <String, int>{};
+    for (var item in detectedObjects) {
+      if (item is Map && item.containsKey('type')) {
+        final type = item['type'].toString().toLowerCase();
+        counts[type] = (counts[type] ?? 0) + 1;
+      }
+    }
+    if (counts.isEmpty) return 'ไม่ระบุชนิด';
+    return counts.entries.map((e) => '${thType(e.key)} ${e.value} ตัว').join(', ');
+  }
+
+  // แก้ไข `_buildStatTable` ให้อ่านจาก `detected_objects`
   Widget _buildStatTable(List<QueryDocumentSnapshot> docs) {
     final freq = {for (var t in allTypes) t: 0};
 
     for (var d in docs) {
-      final t = d['type'].toString().toLowerCase();
-      if (freq.containsKey(t)) freq[t] = (freq[t] ?? 0) + 1;
+      final data = d.data() as Map<String, dynamic>;
+      final detectedObjects = data['detected_objects'];
+      if (detectedObjects is List) {
+        for (var item in detectedObjects) {
+          if (item is Map && item.containsKey('type')) {
+            final t = item['type'].toString().toLowerCase();
+            if (freq.containsKey(t)) {
+              freq[t] = (freq[t] ?? 0) + 1;
+            }
+          }
+        }
+      }
     }
 
     return DataTable(
@@ -116,6 +145,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
+  // แก้ไข `_buildDailyList` ให้อ่านจาก `detected_objects` และจัดการ Timestamp อย่างปลอดภัย
   Widget _buildDailyList(List<QueryDocumentSnapshot> docs) {
     final header = Container(
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
@@ -134,9 +164,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
       separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (_, i) {
         final data = docs[i].data()! as Map<String, dynamic>;
-        final ts = (data['timestamp'] as Timestamp).toDate();
+
+        // จัดการ Timestamp ให้ปลอดภัย (รองรับทั้ง Timestamp และ String)
+        DateTime ts;
+        final dynamic tsValue = data['timestamp'];
+        if (tsValue is Timestamp) {
+          ts = tsValue.toDate();
+        } else if (tsValue is String) {
+          ts = DateTime.tryParse(tsValue) ?? DateTime.now();
+        } else {
+          ts = DateTime.now();
+        }
+
         final date = DateFormat('dd/MM/yy').format(ts);
         final time = DateFormat('HH:mm').format(ts);
+        final detectedObjects = data['detected_objects'];
+        final summaryText = _formatDetectedTypes(detectedObjects);
 
         return InkWell(
           onTap: data['image_url'] != null
@@ -151,7 +194,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               children: [
                 Expanded(flex: 2, child: Text(date, textAlign: TextAlign.center)),
                 Expanded(flex: 2, child: Text(time, textAlign: TextAlign.center)),
-                Expanded(flex: 3, child: Text(thType(data['type']), textAlign: TextAlign.center)),
+                Expanded(flex: 3, child: Text(summaryText, textAlign: TextAlign.center)),
               ],
             ),
           ),
@@ -166,6 +209,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
       ],
     );
   }
+  // --- 🎯 END: โค้ดที่แก้ไข ---
+
 
   @override
   Widget build(BuildContext context) {
@@ -264,9 +309,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         value: selectedYear,
                         underline: Container(height: 1),
                         items: List.generate(
-                          DateTime.now().year - 2025 + 1,
-                          (i) => 2025 + i,
-                        ).map((y) => DropdownMenuItem(value: y, child: Text('$y'))).toList(),
+                          DateTime.now().year - 2024 + 1, // แก้ไขปีเริ่มต้น
+                          (i) => 2024 + i,
+                        ).reversed.toList().map((y) => DropdownMenuItem(value: y, child: Text('$y'))).toList(),
                         onChanged: (y) => setState(() => selectedYear = y ?? selectedYear),
                       ),
                     ],
