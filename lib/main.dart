@@ -317,7 +317,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-/// RootGate: รอ Firebase → เริ่ม NetworkWatcher+Heartbeat → เข้า Wrapper
+// START: โค้ดส่วนของ RootGate ที่ถูกแก้ไข
 class RootGate extends StatefulWidget {
   const RootGate({super.key});
   @override
@@ -325,14 +325,11 @@ class RootGate extends StatefulWidget {
 }
 
 class _RootGateState extends State<RootGate> with WidgetsBindingObserver {
-  bool _firebaseReady = false;
-  bool _initializing = false;
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _initFirebase();
+    _initializeSystem();
   }
 
   @override
@@ -345,7 +342,8 @@ class _RootGateState extends State<RootGate> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_firebaseReady && // <--- เพิ่มเงื่อนไขนี้
+    // เช็คว่า Firebase พร้อมใช้งานแล้วหรือยังก่อนเริ่ม Heartbeat
+    if (Firebase.apps.isNotEmpty &&
         (state == AppLifecycleState.resumed ||
             state == AppLifecycleState.inactive ||
             state == AppLifecycleState.paused)) {
@@ -353,48 +351,42 @@ class _RootGateState extends State<RootGate> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _initFirebase() async {
-    if (_initializing) return;
-    _initializing = true;
-    setState(() {});
-
+  Future<void> _initializeSystem() async {
     try {
+      // ใช้ NetGuard เพื่อให้แน่ใจว่ามีเน็ตก่อนเริ่ม
       await NetGuard.run(
         timeout: const Duration(seconds: 8),
         action: () async {
+          // 1. Init Firebase
           await Firebase.initializeApp(
             options: DefaultFirebaseOptions.currentPlatform,
           );
 
-          // Local notifications
+          // 2. ตั้งค่า Local Notifications
           const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
           const initSettings = InitializationSettings(android: androidInit);
           await flutterLocalNotificationsPlugin.initialize(initSettings);
 
-          // Notification Channel (Android)
+          // 3. สร้าง Notification Channel (สำหรับ Android)
           await flutterLocalNotificationsPlugin
-              .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+              .resolvePlatformSpecificImplementation<
+                  AndroidFlutterLocalNotificationsPlugin>()
               ?.createNotificationChannel(
             const AndroidNotificationChannel(
               'high_importance_channel',
               'High Importance Notifications',
-              description: 'This channel is used for important notifications.',
+              description:
+                  'This channel is used for important notifications.',
               importance: Importance.max,
             ),
           );
-
-          // FCM
-          await FirebaseMessaging.instance.requestPermission();
           
-          // --- 🎯 START: โค้ดที่แก้ไข ---
-          // ลบบรรทัด subscribe เดิมทิ้ง
-          // await FirebaseMessaging.instance.subscribeToTopic('animal_alerts');
-          // --- END: โค้ดที่แก้ไข ---
+          // 4. ตั้งค่า Firebase Messaging (FCM)
+          await FirebaseMessaging.instance.requestPermission();
 
           FirebaseMessaging.onMessage.listen((RemoteMessage message) {
             final n = message.notification;
-            final a = n?.android;
-            if (n != null && a != null) {
+            if (n != null) {
               flutterLocalNotificationsPlugin.show(
                 n.hashCode,
                 n.title,
@@ -403,7 +395,8 @@ class _RootGateState extends State<RootGate> with WidgetsBindingObserver {
                   android: AndroidNotificationDetails(
                     'high_importance_channel',
                     'High Importance Notifications',
-                    channelDescription: 'This channel is used for important notifications.',
+                    channelDescription:
+                        'This channel is used for important notifications.',
                     importance: Importance.max,
                     priority: Priority.high,
                     playSound: true,
@@ -413,54 +406,63 @@ class _RootGateState extends State<RootGate> with WidgetsBindingObserver {
               );
             }
           });
-
-          FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage m) {
-            debugPrint("📲 Notification tapped (from background)");
-          });
-
-          final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
-          if (initialMessage != null) {
-            debugPrint("📲 Opened from terminated via notification");
-          }
         },
       );
 
+      // เมื่อ Firebase และระบบต่างๆ พร้อม
       if (!mounted) return;
-      _firebaseReady = true;
 
-      // --- 🎯 START: โค้ดที่แก้ไข ---
-      // เรียกใช้ฟังก์ชันอัปเดต Topic หลังจาก Firebase พร้อม
+      // อัปเดต Topic ของ FCM ตาม User ID
       await updateUserTopicSubscription();
-      // --- END: โค้ดที่แก้ไข ---
 
-      // เริ่มเฝ้าเน็ต + heartbeat เมื่อระบบพร้อม
+      // เริ่มระบบติดตามสถานะเน็ตและอัปเดต lastSeen
       NetworkWatcher.start();
       Heartbeat.I.start();
-    } on NoInternetException {
-      if (!mounted) return;
-      _firebaseReady = false;
-      Future.delayed(const Duration(seconds: 1), _initFirebase);
-    } catch (_) {
-      if (!mounted) return;
-      _firebaseReady = false;
-      Future.delayed(const Duration(seconds: 2), _initFirebase);
-    } finally {
-      _initializing = false;
-      if (mounted) setState(() {});
+      
+      // *** เมื่อทุกอย่างเสร็จสิ้น ให้เปลี่ยนหน้าไปยัง Wrapper ***
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const Wrapper()),
+      );
+
+    } catch (e) {
+      // หากเกิดปัญหา (ส่วนใหญ่คือไม่มีเน็ต) ให้ลองใหม่ใน 2 วินาที
+      // คุณอาจจะแสดงข้อความข้อผิดพลาดที่นี่ก็ได้
+      if (mounted) {
+        Future.delayed(const Duration(seconds: 2), _initializeSystem);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_firebaseReady) {
-      return const Scaffold(
-        backgroundColor: Color(0xFFF7F8FB),
-        body: SizedBox.shrink(),
-      );
-    }
-    return const Wrapper();
+    // แสดงหน้า Loading นี้เสมอตอนเริ่มต้นแอป
+    return Scaffold(
+      backgroundColor: const Color(0xFF263F6B), // สีพื้นหลังเหมือนหน้า Login
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(
+              'assets/logoapp.png',
+              height: 120,
+            ),
+            const SizedBox(height: 40),
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'กำลังเริ่มต้น...',
+              style: TextStyle(color: Colors.white, fontSize: 16),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
+
+// END: โค้ดส่วนของ RootGate ที่ถูกแก้ไข
 
 /// ===== หน้าเต็มจอเมื่อออฟไลน์ =====
 class _NoInternetPage extends StatefulWidget {

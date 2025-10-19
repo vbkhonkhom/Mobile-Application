@@ -307,6 +307,25 @@ class _HomepageState extends State<Homepage> {
                                       left: 6,
                                       child: Checkbox(
                                         value: selectedIndexes.contains(i),
+
+                                        // *** เปลี่ยนสีกรอบตรงนี้ ***
+                                        side: MaterialStateBorderSide.resolveWith(
+                                          (states) {
+                                            if (states.contains(MaterialState.selected)) {
+                                              // เมื่อถูกเลือก จะไม่มีกรอบแยกต่างหาก หรืออาจใช้สีเดียวกับ activeColor
+                                              return BorderSide(color: Colors.green, width: 2.0); // ตัวอย่าง: กรอบสีเขียวเมื่อถูกเลือก
+                                            }
+                                            // เมื่อยังไม่ถูกเลือก กำหนดสีกรอบเป็นสีแดง
+                                            return BorderSide(color: Colors.white, width: 2.0); // กำหนดสีกรอบเป็นสีแดง (หรือสีที่คุณต้องการ)
+                                          },
+                                        ),
+
+                                        // (ทางเลือก) กำหนดสีพื้นหลังเมื่อถูกเลือก
+                                        activeColor: Colors.green, // สีพื้นหลังเมื่อถูกเลือก (ยังสามารถกำหนดได้)
+                                        
+                                        // (ทางเลือก) กำหนดสีของเครื่องหมายถูก
+                                        checkColor: Colors.white,
+
                                         onChanged: (value) {
                                           setState(() {
                                             if (value == true) {
