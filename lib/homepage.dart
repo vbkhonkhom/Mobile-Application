@@ -33,6 +33,13 @@ class _HomepageState extends State<Homepage> {
     _checkRoleAndLoadDevices();
   }
 
+  /// ===================================================================
+  /// [สำคัญ] ตรวจสอบบทบาทผู้ใช้ (เจ้าบ้าน/ลูกบ้าน) และโหลดข้อมูลเริ่มต้น
+  /// - เช็คข้อมูล user ใน Firestore เพื่อกำหนด role
+  /// - ถ้าเป็น 'member' (ลูกบ้าน) จะใช้ 'ownerId' ที่ผูกไว้
+  /// - ถ้าเป็น 'owner' (เจ้าบ้าน) จะใช้ 'uid' ของตัวเอง
+  /// - จากนั้นเรียกฟังก์ชันโหลดข้อมูลต่างๆ และแสดง SnackBar ต้อนรับ
+  /// ===================================================================
   Future<void> _checkRoleAndLoadDevices() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -121,8 +128,13 @@ class _HomepageState extends State<Homepage> {
     }
   }
 
-  // --- แก้ไขฟังก์ชันนี้ ---
-  // ในคลาส _HomepageState, ฟังก์ชัน _loadDevicesFromRaspberryPi()
+  /// ===================================================================
+  /// [สำคัญ] โหลดข้อมูลอุปกรณ์จาก Firestore และกำหนดสถานะ Online/Offline
+  /// - ดึงข้อมูลอุปกรณ์ทั้งหมดที่เป็นของ ownerId ที่ระบุ
+  /// - สร้าง List<Map> ของ 'devices' ขึ้นมาใหม่
+  /// - [Logic หลัก] เช็คสถานะ 'isOnline' โดยดูว่า field 'status' เป็น 'online'
+  ///   และ 'lastSeen' (เวลาล่าสุดที่พบ) ต้องไม่เกิน 2 นาทีจากเวลาปัจจุบัน
+  /// ===================================================================
   Future<void> _loadDevicesFromRaspberryPi(String ownerId) async {
     final snapshot = await FirebaseFirestore.instance
         .collection('Raspberry_pi')
@@ -136,11 +148,11 @@ class _HomepageState extends State<Homepage> {
           final doc = snapshot.docs[index];
           final data = doc.data();
           final name = data['name']?.toString().trim();
-          
+
           // ตรรกะเช็คสถานะจาก lastSeen
           bool isOnline = false;
-          if (data['status'] == 'online' && data['lastSeen'] != null) { // <--- อ่านจาก lastSeen
-            final lastSeen = (data['lastSeen'] as Timestamp).toDate(); // <--- อ่านจาก lastSeen
+          if (data['status'] == 'online' && data['lastSeen'] != null) {
+            final lastSeen = (data['lastSeen'] as Timestamp).toDate();
             if (DateTime.now().difference(lastSeen).inMinutes < 2) {
               isOnline = true;
             }
@@ -185,7 +197,7 @@ class _HomepageState extends State<Homepage> {
           .update({
         'status': 'To be Added',
         'ownerId': FieldValue.delete(),
-        'lastSeen': FieldValue.delete(), // <-- เพิ่มบรรทัดนี้เพื่อลบฟิลด์ lastSeen
+        'lastSeen': FieldValue.delete(), 
       });
     }
     await _loadDevicesFromRaspberryPi(currentOwnerId);
@@ -322,7 +334,7 @@ class _HomepageState extends State<Homepage> {
 
                                         // (ทางเลือก) กำหนดสีพื้นหลังเมื่อถูกเลือก
                                         activeColor: Colors.green, // สีพื้นหลังเมื่อถูกเลือก (ยังสามารถกำหนดได้)
-                                        
+
                                         // (ทางเลือก) กำหนดสีของเครื่องหมายถูก
                                         checkColor: Colors.white,
 

@@ -17,7 +17,13 @@ class OtherScreen extends StatefulWidget {
 class _OtherScreenState extends State<OtherScreen> {
   final user = FirebaseAuth.instance.currentUser;
 
-  // 1. เปลี่ยนมาใช้ Future เพื่อให้ FutureBuilder ทำงานได้
+  /// ===================================================================
+  /// [สำคัญ] Refactoring to use FutureBuilder
+  /// - แต่เดิมอาจจะใช้ initState + setState ซึ่งจัดการยากกว่า
+  /// - เปลี่ยนมาใช้ FutureBuilder เพื่อจัดการ State ของการโหลดข้อมูล (Loading, Error, Success)
+  ///   ได้อย่างสะอาดและเป็นระบบมากขึ้น
+  /// 1. ประกาศตัวแปร Future ที่จะเก็บผลลัพธ์ของการโหลดข้อมูล
+  /// ===================================================================
   late Future<Map<String, dynamic>> _initializationFuture;
 
   @override

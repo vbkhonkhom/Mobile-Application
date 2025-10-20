@@ -3,6 +3,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+/// ===================================================================
+/// [StatefulWidget] หน้าสำหรับ "เข้าสู่ระบบ" (Login)
+/// - ใช้ Google Sign-In เป็นช่องทางหลักในการยืนยันตัวตน
+/// - เมื่อล็อกอินสำเร็จ จะมีการสร้างหรืออัปเดตข้อมูลผู้ใช้ใน Firestore
+/// ===================================================================
 class Login extends StatefulWidget {
   const Login({super.key});
 
@@ -11,6 +16,10 @@ class Login extends StatefulWidget {
 }
 
 class _LoginState extends State<Login> {
+  /// ===================================================================
+  /// [สำคัญ] ฟังก์ชันสำหรับจัดการกระบวนการล็อกอินทั้งหมด
+  /// - เป็นฟังก์ชันที่ซับซ้อนและเป็นหัวใจของหน้านี้
+  /// ===================================================================
   Future<void> login() async {
     try {
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
@@ -29,13 +38,13 @@ class _LoginState extends State<Login> {
         final docSnapshot = await docRef.get();
 
         if (!docSnapshot.exists) {
-          // ✅ สร้างเอกสารใหม่ (ยังไม่เคยล็อกอินมาก่อน)
+          // สร้างเอกสารใหม่ (ยังไม่เคยล็อกอินมาก่อน)
           await docRef.set({
             'email': user.email,
             'createdAt': FieldValue.serverTimestamp(),
           });
         } else {
-          // ✅ เอกสารมีอยู่แล้ว → อัปเดตเฉพาะ email (ไม่แตะ createdAt)
+          // เอกสารมีอยู่แล้ว → อัปเดตเฉพาะ email (ไม่แตะ createdAt)
           await docRef.set({
             'email': user.email,
           }, SetOptions(merge: true));

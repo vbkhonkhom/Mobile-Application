@@ -34,6 +34,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
     _loadAccessibleSerials();
   }
 
+  /// ===================================================================
+  /// [สำคัญ] โหลดรายการอุปกรณ์ (Serials) ที่ผู้ใช้มีสิทธิ์เข้าถึง
+  /// - ตรวจสอบก่อนว่าเป็น 'owner' หรือ 'member' เพื่อหา ownerId ที่ถูกต้อง
+  /// - ดึงข้อมูลอุปกรณ์ทั้งหมดจาก Firestore ที่ตรงกับ ownerId นั้น
+  /// - นำไปสร้าง List สำหรับ Dropdown เลือกอุปกรณ์
+  /// ===================================================================
   Future<void> _loadAccessibleSerials() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -75,6 +81,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
+  /// ===================================================================
+  /// [สำคัญ] สร้าง Stream สำหรับดึงข้อมูล Detections แบบ Real-time
+  /// - สร้าง query ไปยัง Firestore เพื่อดึงข้อมูลใน subcollection 'detections'
+  /// - กรองข้อมูลเฉพาะเดือนและปีที่ผู้ใช้เลือก (`selectedMonth`, `selectedYear`)
+  /// - ใช้ .snapshots() เพื่อให้ StreamBuilder อัปเดตข้อมูลอัตโนมัติเมื่อมีข้อมูลใหม่
+  /// ===================================================================
   Stream<QuerySnapshot> _monthStream() {
     if (selectedSerial == null) return const Stream.empty();
 
@@ -87,11 +99,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
         .collection('detections')
         .where('timestamp', isGreaterThanOrEqualTo: first)
         .where('timestamp', isLessThan: next)
-        .orderBy('timestamp', descending: true) // เรียงจากใหม่ไปเก่าเสมอ
+        .orderBy('timestamp', descending: true) 
         .snapshots();
   }
 
-  // --- 🎯 START: โค้ดที่แก้ไข ---
   // สร้างฟังก์ชัน helper สำหรับแปลง detected_objects เป็นข้อความสรุป
   String _formatDetectedTypes(dynamic detectedObjects) {
     if (detectedObjects is! List || detectedObjects.isEmpty) {
@@ -109,10 +120,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return counts.entries.map((e) => '${thType(e.key)} ${e.value} ตัว').join(', ');
   }
 
-  // แก้ไข `_buildStatTable` ให้อ่านจาก `detected_objects`
+  /// ===================================================================
+  /// [Widget] สร้างตารางสถิติ (DataTable)
+  /// - วนลูปข้อมูล (docs) ที่ได้จาก StreamBuilder
+  /// - นับความถี่ของสัตว์แต่ละชนิดจาก field `detected_objects`
+  /// - นำข้อมูลที่นับได้มาสร้างเป็นตาราง
+  /// ===================================================================
   Widget _buildStatTable(List<QueryDocumentSnapshot> docs) {
     final freq = {for (var t in allTypes) t: 0};
 
+    // วนลูปเพื่อนับจำนวนสัตว์แต่ละชนิด
     for (var d in docs) {
       final data = d.data() as Map<String, dynamic>;
       final detectedObjects = data['detected_objects'];
@@ -145,7 +162,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  // แก้ไข `_buildDailyList` ให้อ่านจาก `detected_objects` และจัดการ Timestamp อย่างปลอดภัย
+  /// ===================================================================
+  /// [Widget] สร้างรายการข้อมูลแบบรายวัน (ListView)
+  /// - นำข้อมูล (docs) ที่ได้จาก StreamBuilder มาสร้างเป็น ListView
+  /// - แต่ละรายการจะแสดง วันที่, เวลา, และชนิดสัตว์ที่พบ
+  /// - เมื่อแตะที่รายการ จะแสดงรูปภาพใน Dialog (ถ้ามี image_url)
+  /// ===================================================================
   Widget _buildDailyList(List<QueryDocumentSnapshot> docs) {
     final header = Container(
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
@@ -209,7 +231,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       ],
     );
   }
-  // --- 🎯 END: โค้ดที่แก้ไข ---
+
 
 
   @override

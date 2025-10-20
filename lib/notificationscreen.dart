@@ -353,7 +353,7 @@ class _NotificationCard extends StatelessWidget {
   }
 }
 
-// --- 🎯 START: เพิ่ม Widget ใหม่สำหรับแสดงภาพเต็มจอ ---
+// Widget ใหม่สำหรับแสดงภาพเต็มจอ ---
 class _FullScreenImageViewer extends StatelessWidget {
   final String imageUrl;
 
@@ -379,4 +379,3 @@ class _FullScreenImageViewer extends StatelessWidget {
     );
   }
 }
-// --- 🎯 END: เพิ่ม Widget ใหม่ ---

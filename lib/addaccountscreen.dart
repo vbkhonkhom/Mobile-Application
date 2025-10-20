@@ -2,6 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+/// ===================================================================
+/// [StatefulWidget] หน้าสำหรับ "เพิ่มบัญชี" (ส่งคำเชิญ)
+/// - หน้านี้มีไว้สำหรับ "เจ้าบ้าน" (Owner) เพื่อส่งคำเชิญไปยังผู้ใช้อื่น
+///   ให้มาเป็น "ลูกบ้าน" (Member)
+/// ===================================================================
 class AddAccountScreen extends StatefulWidget {
   const AddAccountScreen({super.key});
 
@@ -13,6 +18,10 @@ class _AddAccountScreenState extends State<AddAccountScreen> {
   final TextEditingController _emailController = TextEditingController();
   bool _isLoading = false;
 
+  /// ===================================================================
+  /// [สำคัญ] ฟังก์ชันหลักสำหรับตรวจสอบและส่งคำเชิญ
+  /// - มีขั้นตอนการตรวจสอบหลายชั้นก่อนที่จะสร้างคำเชิญใน Firestore
+  /// ===================================================================
   Future<void> _submit() async {
   final email = _emailController.text.trim();
   if (email.isEmpty || !email.contains('@')) {

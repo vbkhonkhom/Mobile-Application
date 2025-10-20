@@ -4,6 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:project/addaccountscreen.dart';
 import 'package:project/wrapper.dart';
 
+/// ===================================================================
+/// [StatefulWidget] หน้าสำหรับ "จัดการบัญชี" ในครัวเรือน
+/// - เป็นหน้าจอหลักในการดูรายชื่อสมาชิก (เจ้าบ้าน/ลูกบ้าน)
+/// - จัดการคำเชิญ (ยอมรับ/ปฏิเสธ)
+/// - สำหรับเจ้าบ้าน: สามารถ แก้ไข(ลบ) และ เพิ่ม สมาชิกได้
+/// ===================================================================
 class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
 
@@ -166,6 +172,15 @@ class _AccountScreenState extends State<AccountScreen> {
     }
   }
 
+  /// ===================================================================
+  /// [สำคัญ] ฟังก์ชันสำหรับ "ยอมรับ" คำเชิญ
+  /// - ใช้ WriteBatch เพื่อรวบคำสั่งเขียนข้อมูลหลายๆ ที่ให้เป็นชุดเดียว
+  ///   (ถ้าคำสั่งใดพลาด ทั้งหมดจะถูกยกเลิก ทำให้ข้อมูลไม่เสียหาย)
+  /// - การทำงาน:
+  ///   1. เพิ่มตัวเองเข้าไปใน subcollection 'shared' ของเจ้าบ้าน
+  ///   2. อัปเดต field 'owner' ใน document ของตัวเอง
+  ///   3. ลบคำเชิญที่ใช้ไปแล้ว
+  /// ===================================================================
   Future<void> _acceptInvite(Map<String, dynamic> invite) async {
     final batch = FirebaseFirestore.instance.batch();
     final userRef = FirebaseFirestore.instance.collection('users').doc(user!.uid);
@@ -191,7 +206,7 @@ class _AccountScreenState extends State<AccountScreen> {
       );
     }
   }
-
+  /// ฟังก์ชันสำหรับ "ปฏิเสธ" คำเชิญ (ลบคำเชิญทิ้ง)
   Future<void> _rejectInvite(String docId) async {
     await FirebaseFirestore.instance
         .collection('users')

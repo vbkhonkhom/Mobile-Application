@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// ===================================================================
+/// [StatefulWidget] หน้าสำหรับ "เพิ่มอุปกรณ์"
+/// - ผู้ใช้จะกรอก Serial ID ของอุปกรณ์ (เช่น Raspberry Pi)
+/// - ระบบจะตรวจสอบและผูกอุปกรณ์นั้นเข้ากับบัญชีของผู้ใช้
+/// ===================================================================
 class AddDeviceScreen extends StatefulWidget {
   const AddDeviceScreen({super.key});
 
@@ -11,7 +16,10 @@ class AddDeviceScreen extends StatefulWidget {
 
 class _AddDeviceScreenState extends State<AddDeviceScreen> {
   final TextEditingController _serialController = TextEditingController();
-
+  /// ===================================================================
+  /// [สำคัญ] ฟังก์ชันสำหรับตรวจสอบและบันทึกข้อมูลอุปกรณ์ลง Firestore
+  /// - ไม่ใช่แค่การบันทึก แต่เป็นกระบวนการ "ตรวจสอบและยืนยันสิทธิ์" (Verify and Claim)
+  /// ===================================================================
   Future<void> saveToFirestore(String serial) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;

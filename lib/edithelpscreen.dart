@@ -1,6 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+/// ===================================================================
+/// [StatefulWidget] หน้าสำหรับ "แก้ไข" ข้อมูลหน่วยงานช่วยเหลือ
+/// - รับค่า docId, currentName, และ currentPhone มาจากหน้าที่แล้ว
+///   เพื่อระบุว่าจะแก้ไขเอกสารไหน และแสดงข้อมูลเดิม
+/// ===================================================================
 class EditHelpScreen extends StatefulWidget {
   final String docId;
   final String currentName;

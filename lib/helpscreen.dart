@@ -4,6 +4,13 @@ import 'package:flutter/material.dart';
 import 'addhelpscreen.dart';
 import 'edithelpscreen.dart';
 
+/// ===================================================================
+/// [StatelessWidget] หน้าสำหรับแสดงข้อมูล "ช่วยเหลือ"
+/// - ใช้ StreamBuilder เพื่อแสดงข้อมูลจาก Firestore แบบ Real-time
+///   หมายความว่าถ้ามีข้อมูลเปลี่ยนแปลงในฐานข้อมูล หน้าจอนี้จะอัปเดตเองอัตโนมัติ
+/// - ผู้ใช้สามารถเพิ่มข้อมูลใหม่ได้
+/// - ผู้ใช้จะสามารถแก้ไขได้เฉพาะข้อมูลที่ตัวเองเป็นคนเพิ่มเข้ามาเท่านั้น
+/// ===================================================================
 class HelpScreen extends StatelessWidget {
   const HelpScreen({super.key});
 

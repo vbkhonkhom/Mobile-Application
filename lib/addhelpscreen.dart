@@ -2,6 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+/// ===================================================================
+/// [StatefulWidget] หน้าสำหรับ "เพิ่ม" ข้อมูลหน่วยงานช่วยเหลือใหม่
+/// - เป็นฟอร์มง่ายๆ ที่มีช่องกรอกชื่อและเบอร์โทร
+/// - เมื่อกด Confirm จะบันทึกข้อมูลลง Firestore
+/// ===================================================================
 class AddHelpScreen extends StatefulWidget {
   const AddHelpScreen({super.key});
 
