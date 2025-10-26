@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart'; // <<< เพิ่ม import
 import 'package:project/adddevicescreen.dart';
 import 'package:project/notificationscreen.dart';
 import 'package:project/otherscreen.dart';
+import 'package:project/wrapper.dart'; // <<< เพิ่ม import
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
@@ -41,7 +43,8 @@ class _HomepageState extends State<Homepage> {
   /// - จากนั้นเรียกฟังก์ชันโหลดข้อมูลต่างๆ และแสดง SnackBar ต้อนรับ
   /// ===================================================================
   Future<void> _checkRoleAndLoadDevices() async {
-    final user = FirebaseAuth.instance.currentUser;
+    // ... (โค้ดส่วนนี้เหมือนเดิม) ...
+     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     final userDoc =
@@ -89,6 +92,7 @@ class _HomepageState extends State<Homepage> {
   }
 
   Future<void> _checkNotifications() async {
+     // ... (โค้ดส่วนนี้เหมือนเดิม) ...
     final snapshot = await FirebaseFirestore.instance
         .collection('Raspberry_pi')
         .where('ownerId', isEqualTo: currentOwnerId)
@@ -111,6 +115,7 @@ class _HomepageState extends State<Homepage> {
   }
 
   Future<void> _checkInvites() async {
+     // ... (โค้ดส่วนนี้เหมือนเดิม) ...
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -136,6 +141,7 @@ class _HomepageState extends State<Homepage> {
   ///   และ 'lastSeen' (เวลาล่าสุดที่พบ) ต้องไม่เกิน 2 นาทีจากเวลาปัจจุบัน
   /// ===================================================================
   Future<void> _loadDevicesFromRaspberryPi(String ownerId) async {
+     // ... (โค้ดส่วนนี้เหมือนเดิม) ...
     final snapshot = await FirebaseFirestore.instance
         .collection('Raspberry_pi')
         .where('ownerId', isEqualTo: ownerId)
@@ -165,12 +171,14 @@ class _HomepageState extends State<Homepage> {
           };
         });
         currentSerial = serials.isNotEmpty ? serials.first : '';
-        isEditMode = false;
+        isEditMode = false; // รีเซ็ตโหมดแก้ไขเมื่อโหลดข้อมูลใหม่
+        selectedIndexes.clear(); // ล้างรายการที่เลือกไว้
       });
     }
   }
 
   Future<void> _addDevice() async {
+     // ... (โค้ดส่วนนี้เหมือนเดิม) ...
     final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const AddDeviceScreen()),
@@ -182,6 +190,7 @@ class _HomepageState extends State<Homepage> {
   }
 
   void _toggleEditMode() {
+     // ... (โค้ดส่วนนี้เหมือนเดิม) ...
     setState(() {
       isEditMode = !isEditMode;
       selectedIndexes.clear();
@@ -189,6 +198,7 @@ class _HomepageState extends State<Homepage> {
   }
 
   Future<void> _deleteSelected() async {
+     // ... (โค้ดส่วนนี้เหมือนเดิม) ...
     // ใช้ `toList` เพื่อสร้างสำเนาของ `selectedIndexes` ก่อนวนลูป
     for (int i in selectedIndexes.toList()) {
       await FirebaseFirestore.instance
@@ -197,21 +207,18 @@ class _HomepageState extends State<Homepage> {
           .update({
         'status': 'To be Added',
         'ownerId': FieldValue.delete(),
-        'lastSeen': FieldValue.delete(), 
+        'lastSeen': FieldValue.delete(),
       });
     }
-    await _loadDevicesFromRaspberryPi(currentOwnerId);
+    await _loadDevicesFromRaspberryPi(currentOwnerId); // โหลดข้อมูลใหม่หลังลบ
     await _checkNotifications();
-    if (mounted) {
-      setState(() {
-        selectedIndexes.clear();
-        isEditMode = false;
-      });
-    }
+    // ไม่ต้อง setState isEditMode = false ที่นี่แล้ว เพราะ _loadDevicesFromRaspberryPi ทำแล้ว
   }
 
+
   Future<void> _renameDevice(int index) async {
-    final currentName = devices[index]['name'];
+     // ... (โค้ดส่วนนี้เหมือนเดิม) ...
+     final currentName = devices[index]['name'];
     final nameController = TextEditingController(text: currentName);
     final newName = await showDialog<String>(
       context: context,
@@ -232,18 +239,56 @@ class _HomepageState extends State<Homepage> {
           .collection('Raspberry_pi')
           .doc(serials[index])
           .update({'name': newName.trim()});
-      await _loadDevicesFromRaspberryPi(currentOwnerId);
+      await _loadDevicesFromRaspberryPi(currentOwnerId); // โหลดข้อมูลใหม่หลังเปลี่ยนชื่อ
     }
   }
 
   void _onItemTapped(int index) {
+     // ... (โค้ดส่วนนี้เหมือนเดิม) ...
+     // ป้องกันการกดแท็บ Notification ถ้ายังไม่มีอุปกรณ์
     if (index == 1 && devices.isEmpty) return;
+
     setState(() {
       _selectedIndex = index;
+      // รีเซ็ตสถานะแจ้งเตือนเมื่อเปลี่ยนแท็บ
       if (index == 1) hasNotification = false;
       if (index == 2) hasInvite = false;
     });
   }
+
+  // --- START: เพิ่มฟังก์ชัน signOut ---
+  Future<void> signOut() async {
+    // แสดงกล่องยืนยันก่อนออกจากระบบ
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ยืนยันการออกจากระบบ'),
+        content: const Text('คุณต้องการออกจากระบบใช่หรือไม่?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false), // คืนค่า false
+            child: const Text('ยกเลิก'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true), // คืนค่า true
+            child: const Text('ยืนยัน', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    // ถ้าผู้ใช้กดยืนยัน (confirm == true)
+    if (confirm == true) {
+      await GoogleSignIn().signOut();
+      await FirebaseAuth.instance.signOut();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const Wrapper()), // กลับไปหน้า Wrapper
+        (route) => false,
+      );
+    }
+  }
+  // --- END: เพิ่มฟังก์ชัน signOut ---
 
   @override
   Widget build(BuildContext context) {
@@ -254,14 +299,48 @@ class _HomepageState extends State<Homepage> {
                 ? const Center(child: CircularProgressIndicator())
                 : Column(
                     children: [
+                      // --- START: แถบ AppBar ด้านบน ---
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         height: 60,
                         color: const Color(0xFFd4e8ff),
                         child: Row(
+                          // mainAxisAlignment: MainAxisAlignment.spaceBetween, // เอาออกเพื่อให้ชิดซ้ายขวา
+                          children: [
+                            Image.asset(
+                              'assets/cctv.png',
+                              height: 30,
+                            ),
+                            const SizedBox(width: 8),
+                            const Expanded( // ใช้ Expanded ดันข้อความไปทางซ้าย
+                              child: Text(
+                                'ระบบตรวจจับสิ่งมีชีวิตที่ไม่พึงประสงค์',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            // --- START: เพิ่ม IconButton สำหรับ Logout ---
+                            IconButton(
+                              icon: const Icon(Icons.logout, color: Color.fromARGB(255, 255, 0, 0)), // ไอคอนประตู
+                              tooltip: 'ออกจากระบบ', // ข้อความเมื่อกดค้าง
+                              onPressed: signOut, // เรียกฟังก์ชัน signOut เมื่อกด
+                            ),
+                            // --- END: เพิ่ม IconButton ---
+                          ],
+                        ),
+                      ),
+                      // --- END: แถบ AppBar ด้านบน ---
+
+                      // --- START: ข้อความ "รายการอุปกรณ์" และปุ่มแก้ไข ---
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+                        child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('อุปกรณ์ทั้งหมด', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                            const Text(
+                              'รายการอุปกรณ์',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
                             if (devices.isNotEmpty && role == 'owner')
                               IconButton(
                                 icon: Icon(isEditMode ? Icons.check : Icons.edit, color: Colors.black),
@@ -270,13 +349,14 @@ class _HomepageState extends State<Homepage> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      // --- END: ข้อความและปุ่มแก้ไข ---
+
                       Expanded(
                         child: GridView.count(
                           crossAxisCount: 2,
                           crossAxisSpacing: 16,
                           mainAxisSpacing: 16,
-                          padding: const EdgeInsets.all(20),
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                           childAspectRatio: 1,
                           children: [
                             for (int i = 0; i < devices.length; i++)
@@ -286,27 +366,29 @@ class _HomepageState extends State<Homepage> {
                                     onTap: () {
                                       if (isEditMode && role == 'owner') {
                                         _renameDevice(i);
-                                      } else { // <-- เอาเงื่อนไข isOnline ออก
+                                      } else {
                                         setState(() {
                                           currentSerial = devices[i]['serial'];
                                           _selectedIndex = 1;
+                                          hasNotification = false;
                                         });
                                       }
                                     },
                                     child: Container(
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF263F6B), // <-- สีฟ้าเสมอ
+                                        color: const Color(0xFF263F6B),
                                         borderRadius: BorderRadius.circular(16),
                                       ),
                                       child: Center(
                                         child: Column(
                                           mainAxisAlignment: MainAxisAlignment.center,
                                           children: [
-                                            const SizedBox(height: 8),
                                             Text(
                                               devices[i]['name'],
-                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                                               textAlign: TextAlign.center,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ],
                                         ),
@@ -315,29 +397,16 @@ class _HomepageState extends State<Homepage> {
                                   ),
                                   if (isEditMode && role == 'owner')
                                     Positioned(
-                                      top: 6,
-                                      left: 6,
+                                      top: 4,
+                                      left: 4,
                                       child: Checkbox(
                                         value: selectedIndexes.contains(i),
-
-                                        // *** เปลี่ยนสีกรอบตรงนี้ ***
                                         side: MaterialStateBorderSide.resolveWith(
-                                          (states) {
-                                            if (states.contains(MaterialState.selected)) {
-                                              // เมื่อถูกเลือก จะไม่มีกรอบแยกต่างหาก หรืออาจใช้สีเดียวกับ activeColor
-                                              return BorderSide(color: Colors.green, width: 2.0); // ตัวอย่าง: กรอบสีเขียวเมื่อถูกเลือก
-                                            }
-                                            // เมื่อยังไม่ถูกเลือก กำหนดสีกรอบเป็นสีแดง
-                                            return BorderSide(color: Colors.white, width: 2.0); // กำหนดสีกรอบเป็นสีแดง (หรือสีที่คุณต้องการ)
-                                          },
+                                          (states) => BorderSide(color: Colors.white, width: 2.0),
                                         ),
-
-                                        // (ทางเลือก) กำหนดสีพื้นหลังเมื่อถูกเลือก
-                                        activeColor: Colors.green, // สีพื้นหลังเมื่อถูกเลือก (ยังสามารถกำหนดได้)
-
-                                        // (ทางเลือก) กำหนดสีของเครื่องหมายถูก
+                                        activeColor: Colors.green,
                                         checkColor: Colors.white,
-
+                                        visualDensity: VisualDensity.compact,
                                         onChanged: (value) {
                                           setState(() {
                                             if (value == true) {
@@ -359,7 +428,7 @@ class _HomepageState extends State<Homepage> {
                                     color: Colors.grey[300],
                                     borderRadius: BorderRadius.circular(16),
                                   ),
-                                  child: const Center(child: Icon(Icons.add, size: 50)),
+                                  child: const Center(child: Icon(Icons.add, size: 50, color: Colors.black54)),
                                 ),
                               ),
                           ],
@@ -389,35 +458,55 @@ class _HomepageState extends State<Homepage> {
         items: [
           const BottomNavigationBarItem(icon: Icon(Icons.devices), label: 'อุปกรณ์'),
           BottomNavigationBarItem(
-            icon: Stack(children: [
-              const Icon(Icons.notifications),
-              if (hasNotification)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.notifications),
+                if (hasNotification)
+                  Positioned(
+                    top: -4,
+                    right: -4,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 8,
+                        minHeight: 8,
+                      ),
+                    ),
                   ),
-                ),
-            ]),
+              ],
+            ),
             label: 'การแจ้งเตือน',
           ),
           BottomNavigationBarItem(
-            icon: Stack(children: [
-              const Icon(Icons.person),
-              if (hasInvite)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.person),
+                if (hasInvite)
+                  Positioned(
+                     top: -4,
+                    right: -4,
+                     child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 8,
+                        minHeight: 8,
+                      ),
+                    ),
                   ),
-                ),
-            ]),
+              ],
+            ),
             label: 'อื่น ๆ',
           ),
         ],
@@ -425,3 +514,4 @@ class _HomepageState extends State<Homepage> {
     );
   }
 }
+

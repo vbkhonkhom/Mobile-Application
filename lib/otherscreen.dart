@@ -6,6 +6,7 @@ import 'package:project/accountscreen.dart';
 import 'package:project/helpscreen.dart';
 import 'package:project/historyscreen.dart';
 import 'package:project/wrapper.dart';
+import 'package:project/about.dart'; // <<< ตรวจสอบว่า import ไฟล์ about.dart ถูกต้อง
 
 class OtherScreen extends StatefulWidget {
   const OtherScreen({super.key});
@@ -17,36 +18,24 @@ class OtherScreen extends StatefulWidget {
 class _OtherScreenState extends State<OtherScreen> {
   final user = FirebaseAuth.instance.currentUser;
 
-  /// ===================================================================
-  /// [สำคัญ] Refactoring to use FutureBuilder
-  /// - แต่เดิมอาจจะใช้ initState + setState ซึ่งจัดการยากกว่า
-  /// - เปลี่ยนมาใช้ FutureBuilder เพื่อจัดการ State ของการโหลดข้อมูล (Loading, Error, Success)
-  ///   ได้อย่างสะอาดและเป็นระบบมากขึ้น
-  /// 1. ประกาศตัวแปร Future ที่จะเก็บผลลัพธ์ของการโหลดข้อมูล
-  /// ===================================================================
   late Future<Map<String, dynamic>> _initializationFuture;
 
   @override
   void initState() {
     super.initState();
-    // 2. เรียกฟังก์ชันเพื่อเริ่มโหลดข้อมูล แต่จะยังไม่รอจนเสร็จ
     _initializationFuture = _initializeScreen();
   }
 
-  // 3. ปรับฟังก์ชันให้คืนค่า (return) ข้อมูลที่จำเป็นออกมาเป็น Map
   Future<Map<String, dynamic>> _initializeScreen() async {
     if (user == null) {
-      // กรณีที่อาจจะเกิดขึ้นได้ยาก แต่ป้องกันไว้ก่อน
       throw Exception('User is not logged in.');
     }
 
-    // โหลดข้อมูลทั้งสองส่วนพร้อมกันเพื่อความรวดเร็ว
     final results = await Future.wait([
       _checkInvites(),
       _loadUserRole(),
     ]);
 
-    // คืนค่าข้อมูลที่ได้สำหรับนำไปใช้สร้าง UI
     return {
       'hasInvite': results[0] as bool,
       'roleLabel': results[1] as String?,
@@ -54,6 +43,7 @@ class _OtherScreenState extends State<OtherScreen> {
   }
 
   Future<bool> _checkInvites() async {
+    // ... (โค้ดเหมือนเดิม) ...
     final inviteSnap = await FirebaseFirestore.instance
         .collection('users')
         .doc(user!.uid)
@@ -64,6 +54,7 @@ class _OtherScreenState extends State<OtherScreen> {
   }
 
   Future<String?> _loadUserRole() async {
+    // ... (โค้ดเหมือนเดิม) ...
     final doc =
         await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
     final data = doc.data();
@@ -82,43 +73,62 @@ class _OtherScreenState extends State<OtherScreen> {
         return 'เจ้าบ้าน';
       }
     }
-    return null; // กรณีไม่มีอุปกรณ์และไม่ใช่ลูกบ้าน
+    return null;
   }
 
+  // --- START: แก้ไขฟังก์ชัน signOut ---
   Future<void> signOut() async {
-    await GoogleSignIn().signOut();
-    await FirebaseAuth.instance.signOut();
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const Wrapper()),
-      (route) => false,
+    // แสดงกล่องยืนยันก่อนออกจากระบบ
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ยืนยันการออกจากระบบ'),
+        content: const Text('คุณต้องการออกจากระบบใช่หรือไม่?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false), // คืนค่า false
+            child: const Text('ยกเลิก'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true), // คืนค่า true
+            child: const Text('ยืนยัน', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
+
+    // ถ้าผู้ใช้กดยืนยัน (confirm == true)
+    if (confirm == true) {
+      await GoogleSignIn().signOut();
+      await FirebaseAuth.instance.signOut();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const Wrapper()),
+        (route) => false,
+      );
+    }
   }
+  // --- END: แก้ไขฟังก์ชัน signOut ---
 
   @override
   Widget build(BuildContext context) {
-    // 4. ใช้ FutureBuilder เพื่อจัดการการแสดงผลระหว่างโหลดข้อมูล
     return FutureBuilder<Map<String, dynamic>>(
       future: _initializationFuture,
       builder: (context, snapshot) {
-        // **สถานะที่ 1: กำลังโหลดข้อมูล**
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        // **สถานะที่ 2: โหลดข้อมูลผิดพลาด**
         if (snapshot.hasError) {
           return Center(
             child: Text('เกิดข้อผิดพลาด: ${snapshot.error}'),
           );
         }
 
-        // **สถานะที่ 3: โหลดข้อมูลสำเร็จ**
         final data = snapshot.data!;
         final hasInvite = data['hasInvite'] as bool;
         final roleLabel = data['roleLabel'] as String?;
 
-        // 5. นำข้อมูลที่โหลดเสร็จแล้ว (data) มาสร้าง UI ที่สมบูรณ์
         return Column(
           children: [
             Container(
@@ -146,7 +156,7 @@ class _OtherScreenState extends State<OtherScreen> {
               child: ListView(
                 children: [
                   MenuTile(
-                    icon: Icons.settings,
+                    icon: Icons.group,
                     titleWidget: Row(
                       children: [
                         const Text('สมาชิกในครัวเรือน'),
@@ -172,7 +182,7 @@ class _OtherScreenState extends State<OtherScreen> {
                     },
                   ),
                   MenuTile(
-                    icon: Icons.info_outline,
+                    icon: Icons.contact_support_outlined,
                     title: 'ช่วยเหลือ',
                     onTap: () => Navigator.push(
                       context,
@@ -191,10 +201,20 @@ class _OtherScreenState extends State<OtherScreen> {
                       ),
                     ),
                   ),
+                  MenuTile(
+                    icon: Icons.info_outline,
+                    title: 'เกี่ยวกับ',
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const About(),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   Center(
                     child: ElevatedButton(
-                      onPressed: signOut,
+                      onPressed: signOut, // <<< ปุ่มนี้เรียกใช้ฟังก์ชัน signOut ที่แก้ไขแล้ว
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red,
                         shape: RoundedRectangleBorder(
@@ -221,6 +241,7 @@ class _OtherScreenState extends State<OtherScreen> {
   }
 }
 
+// คลาส MenuTile เหมือนเดิม
 class MenuTile extends StatelessWidget {
   final IconData icon;
   final String? title;
@@ -237,16 +258,19 @@ class MenuTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      leading: Icon(icon, color: Colors.black),
-      title: titleWidget ??
-          Text(
-            title ?? '',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-          ),
-      tileColor: const Color(0xFFe8f3ff),
-      onTap: onTap,
+    return Container(
+      color: const Color(0xFFe8f3ff),
+      margin: const EdgeInsets.symmetric(vertical: 1.0),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        leading: Icon(icon, color: Colors.black),
+        title: titleWidget ??
+            Text(
+              title ?? '',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            ),
+        onTap: onTap,
+      ),
     );
   }
 }
